@@ -757,6 +757,17 @@ body::after {
           </label>
         </div>
       </div>
+      <div class="volume-slider-wrap" style="margin-top:16px">
+        <div class="volume-label-row">
+          <span>Sound Boost</span>
+          <span class="vol-value" id="vid-boost-display">100%</span>
+        </div>
+        <input type="range" id="vid-boost-slider" min="100" max="500" value="100" step="10" oninput="document.getElementById('vid-boost-display').textContent = this.value + '%'">
+        <div style="display:flex;justify-content:space-between;margin-top:4px">
+          <span style="font-size:0.55rem;color:var(--text-muted);letter-spacing:1px">NORMAL</span>
+          <span style="font-size:0.55rem;color:var(--danger);letter-spacing:1px">5× BOOST</span>
+        </div>
+      </div>
       <div class="duration-display">
         <span class="label">Video Duration</span>
         <span class="value" id="vid-duration">15.4s</span>
@@ -790,6 +801,7 @@ body::after {
           <span id="out-name">Emo Denino'd</span>
           <span id="out-duration">15s</span>
           <span id="out-loop">Looping</span>
+          <span id="out-boost">100%</span>
         </div>
         <div style="text-align:center;margin-top:16px">
           <a id="download-btn" class="btn-generate" href="emodeninod-full19_6_new.mp4" download="Emo_Deninod.mp4" style="text-decoration:none;display:inline-flex;padding:12px 36px;font-size:0.85rem">
@@ -1022,10 +1034,12 @@ function generateOutput() {
     const dur = parseFloat(document.getElementById('duration').value) || VIDEO_NATIVE_DURATION;
     const name = document.getElementById('video-name').value || 'Troll Video';
     const loop = document.getElementById('loop-toggle').checked;
+    const boostPct = parseInt(document.getElementById('vid-boost-slider').value) || 100;
     document.getElementById('output-thumb').src = customThumb || previewThumb.src;
     document.getElementById('out-name').textContent = name;
     document.getElementById('out-duration').textContent = dur + 's';
     document.getElementById('out-loop').textContent = loop ? 'Looping' : 'No Loop';
+    document.getElementById('out-boost').textContent = boostPct > 100 ? boostPct + '% Boost' : 'Normal Vol';
     const outputSection = document.getElementById('output-section');
     outputSection.classList.add('visible');
     const outputVideo = document.getElementById('output-video');
@@ -1033,11 +1047,12 @@ function generateOutput() {
     document.getElementById('output-thumb').style.display = 'block';
     document.getElementById('output-overlay').classList.remove('hidden');
     outputPlaying = false;
-    outputVideo.dataset.targetDuration = dur;
-    outputVideo.dataset.shouldLoop = loop;
-    // Update download button filename
+    outputVideo.dataset.targetDuration = String(dur);
+    outputVideo.dataset.shouldLoop = String(loop);
+    outputVideo.dataset.boostPct = String(boostPct);
+    // Randomized download filename
     const dlBtn = document.getElementById('download-btn');
-    dlBtn.download = name.replace(/[^a-zA-Z0-9_\-' ]/g, '').replace(/\s+/g, '_') + '.mp4';
+    dlBtn.download = generateRandomFilename() + '.mp4';
     btn.disabled = false;
     btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Generate Troll';
     toast('Troll video ready \u2014 click to play!');
@@ -1045,17 +1060,25 @@ function generateOutput() {
   }, 800);
 }
 
+// Random filename generator
+function generateRandomFilename() {
+  const adj = ['funny','epic','crazy','wild','dank','based','rare','ultra','mega','hyper','super','sick','fire','goated','elite','savage','cursed','blessed','spicy','crispy','chunky','sneaky','goofy','zesty','prime','raw','cold','heated','cosmic','turbo'];
+  const nouns = ['clip','moment','video','footage','edit','reel','cut','take','shot','drop','vlog','stream','highlight','play','scene','capture','render','upload','content','media','file','recording','segment','compilation','montage'];
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const num = Math.floor(Math.random() * 9000) + 1000;
+  return pick(adj) + '_' + pick(nouns) + '_' + pick(adj) + '_' + num;
+}
+
 function playOutput() {
   const outputVideo = document.getElementById('output-video');
   const outputThumb = document.getElementById('output-thumb');
   const overlay = document.getElementById('output-overlay');
 
-  // This function only handles the initial thumbnail->video reveal
-  // After that, native controls take over
   if (outputPlaying) return;
 
   const targetDur = parseFloat(outputVideo.dataset.targetDuration) || VIDEO_NATIVE_DURATION;
   const shouldLoop = outputVideo.dataset.shouldLoop === 'true';
+  const boostPct = parseFloat(outputVideo.dataset.boostPct) || 100;
 
   // Reveal video, hide thumbnail and overlay
   outputThumb.style.display = 'none';
@@ -1066,26 +1089,53 @@ function playOutput() {
   outputVideo.muted = false;
   outputVideo.volume = 1.0;
   outputVideo.currentTime = 0;
+
+  // Set loop on the video element itself — browser handles seamless looping
   outputVideo.loop = shouldLoop;
-  outputVideo.play().catch(() => {
-    // Autoplay blocked - user will use native controls
-  });
+
+  // Sound boost via Web Audio API gain node
+  if (boostPct > 100) {
+    try {
+      if (!outputVideo._audioCtx) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = ctx.createMediaElementSource(outputVideo);
+        const gainNode = ctx.createGain();
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        outputVideo._audioCtx = ctx;
+        outputVideo._gainNode = gainNode;
+      }
+      outputVideo._audioCtx.resume();
+      outputVideo._gainNode.gain.value = boostPct / 100;
+    } catch (e) {
+      console.warn('Audio boost failed:', e);
+    }
+  } else if (outputVideo._gainNode) {
+    outputVideo._gainNode.gain.value = 1.0;
+  }
+
+  outputVideo.play().catch(() => {});
   outputPlaying = true;
 
-  // Duration cutoff timer
+  // Clear any old ended handler to avoid fighting with loop
+  outputVideo.onended = null;
+
+  // Duration cutoff timer — this is the master timer
   if (outputTimer) clearTimeout(outputTimer);
   outputTimer = setTimeout(() => {
     outputVideo.pause();
     resetOutputToThumb();
   }, targetDur * 1000);
 
-  // If not looping and video ends naturally before timer
-  outputVideo.onended = () => {
-    if (!shouldLoop) {
+  // If NOT looping, video ends naturally before the duration timer
+  if (!shouldLoop) {
+    outputVideo.onended = () => {
       if (outputTimer) { clearTimeout(outputTimer); outputTimer = null; }
       resetOutputToThumb();
-    }
-  };
+    };
+  }
+  // If looping, browser's native loop handles it — onended never fires
+  // The duration timer above will cut it off at the right time
 }
 
 function resetOutputToThumb() {
