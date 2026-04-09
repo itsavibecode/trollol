@@ -441,14 +441,22 @@ body::after {
   background: #000;
   border: 1px solid var(--purple);
   box-shadow: 0 0 40px var(--purple-glow);
-  cursor: pointer;
 }
-.output-video-wrap video,
+.output-video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  z-index: 3;
+  position: absolute;
+  inset: 0;
+}
 .output-video-wrap img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   display: block;
+  cursor: pointer;
 }
 .output-video-wrap .thumb-overlay {
   position: absolute;
@@ -459,6 +467,7 @@ body::after {
   background: rgba(0,0,0,0.25);
   z-index: 2;
   transition: opacity 0.3s;
+  cursor: pointer;
 }
 .output-video-wrap .thumb-overlay.hidden { opacity: 0; pointer-events: none; }
 .output-video-wrap .thumb-overlay svg {
@@ -770,10 +779,10 @@ body::after {
     <div class="output-section" id="output-section">
       <div class="section">
         <div class="section-title">Your Troll Video</div>
-        <div class="output-video-wrap" id="output-wrap" onclick="playOutput()">
-          <img id="output-thumb" src="" alt="Thumbnail">
-          <video id="output-video" src="emodeninod-full19_6_new.mp4" preload="metadata" style="display:none;position:absolute;inset:0;z-index:1" muted></video>
-          <div class="thumb-overlay" id="output-overlay">
+        <div class="output-video-wrap" id="output-wrap">
+          <img id="output-thumb" src="" alt="Thumbnail" onclick="playOutput()" style="cursor:pointer">
+          <video id="output-video" src="emodeninod-full19_6_new.mp4" preload="metadata" controls style="display:none;position:absolute;inset:0;z-index:1;width:100%;height:100%"></video>
+          <div class="thumb-overlay" id="output-overlay" onclick="playOutput()" style="cursor:pointer">
             <svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" stroke="#8b5cf6" stroke-width="3" opacity="0.7"/><polygon points="32,24 60,40 32,56" fill="#a78bfa"/></svg>
           </div>
         </div>
@@ -781,6 +790,12 @@ body::after {
           <span id="out-name">Emo Denino'd</span>
           <span id="out-duration">15s</span>
           <span id="out-loop">Looping</span>
+        </div>
+        <div style="text-align:center;margin-top:16px">
+          <a id="download-btn" class="btn-generate" href="emodeninod-full19_6_new.mp4" download="Emo_Deninod.mp4" style="text-decoration:none;display:inline-flex;padding:12px 36px;font-size:0.85rem">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Video
+          </a>
         </div>
       </div>
     </div>
@@ -907,7 +922,7 @@ function switchTab(tab) {
 
 function stopAllMedia() {
   if (previewPlaying) togglePreview();
-  if (outputPlaying) playOutput();
+  if (outputPlaying) resetOutputToThumb();
   if (soundPreviewPlaying) toggleSoundPreview();
   if (soundTestPlaying) stopSoundTest();
 }
@@ -1020,6 +1035,9 @@ function generateOutput() {
     outputPlaying = false;
     outputVideo.dataset.targetDuration = dur;
     outputVideo.dataset.shouldLoop = loop;
+    // Update download button filename
+    const dlBtn = document.getElementById('download-btn');
+    dlBtn.download = name.replace(/[^a-zA-Z0-9_\-' ]/g, '').replace(/\s+/g, '_') + '.mp4';
     btn.disabled = false;
     btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Generate Troll';
     toast('Troll video ready \u2014 click to play!');
@@ -1031,31 +1049,56 @@ function playOutput() {
   const outputVideo = document.getElementById('output-video');
   const outputThumb = document.getElementById('output-thumb');
   const overlay = document.getElementById('output-overlay');
-  if (outputPlaying) {
-    outputVideo.pause(); outputVideo.currentTime = 0;
-    outputVideo.style.display = 'none'; outputThumb.style.display = 'block';
-    overlay.classList.remove('hidden'); outputPlaying = false;
-    if (outputTimer) { clearTimeout(outputTimer); outputTimer = null; }
-    return;
-  }
+
+  // This function only handles the initial thumbnail->video reveal
+  // After that, native controls take over
+  if (outputPlaying) return;
+
   const targetDur = parseFloat(outputVideo.dataset.targetDuration) || VIDEO_NATIVE_DURATION;
   const shouldLoop = outputVideo.dataset.shouldLoop === 'true';
-  outputThumb.style.display = 'none'; outputVideo.style.display = 'block';
+
+  // Reveal video, hide thumbnail and overlay
+  outputThumb.style.display = 'none';
+  outputVideo.style.display = 'block';
   overlay.classList.add('hidden');
-  outputVideo.currentTime = 0; outputVideo.loop = shouldLoop;
-  outputVideo.play(); outputPlaying = true;
+
+  // Ensure sound is ON
+  outputVideo.muted = false;
+  outputVideo.volume = 1.0;
+  outputVideo.currentTime = 0;
+  outputVideo.loop = shouldLoop;
+  outputVideo.play().catch(() => {
+    // Autoplay blocked - user will use native controls
+  });
+  outputPlaying = true;
+
+  // Duration cutoff timer
+  if (outputTimer) clearTimeout(outputTimer);
   outputTimer = setTimeout(() => {
-    outputVideo.pause(); outputVideo.currentTime = 0;
-    outputVideo.style.display = 'none'; outputThumb.style.display = 'block';
-    overlay.classList.remove('hidden'); outputPlaying = false;
+    outputVideo.pause();
+    resetOutputToThumb();
   }, targetDur * 1000);
-  if (!shouldLoop) {
-    outputVideo.onended = () => {
+
+  // If not looping and video ends naturally before timer
+  outputVideo.onended = () => {
+    if (!shouldLoop) {
       if (outputTimer) { clearTimeout(outputTimer); outputTimer = null; }
-      outputVideo.style.display = 'none'; outputThumb.style.display = 'block';
-      overlay.classList.remove('hidden'); outputPlaying = false;
-    };
-  }
+      resetOutputToThumb();
+    }
+  };
+}
+
+function resetOutputToThumb() {
+  const outputVideo = document.getElementById('output-video');
+  const outputThumb = document.getElementById('output-thumb');
+  const overlay = document.getElementById('output-overlay');
+  outputVideo.pause();
+  outputVideo.currentTime = 0;
+  outputVideo.style.display = 'none';
+  outputThumb.style.display = 'block';
+  overlay.classList.remove('hidden');
+  outputPlaying = false;
+  if (outputTimer) { clearTimeout(outputTimer); outputTimer = null; }
 }
 
 // ═══════════════════════════════════════════════════════════
