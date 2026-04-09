@@ -805,20 +805,31 @@ body::after {
           <span id="out-loop">—</span>
           <span id="out-boost">—</span>
         </div>
-        <div id="render-progress" style="display:none;margin-top:16px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-            <span style="font-size:0.6rem;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase">Rendering Video</span>
-            <span style="font-size:0.6rem;color:var(--purple-bright);font-weight:700" id="render-pct">0%</span>
+        <div id="render-progress" style="display:none;margin-top:16px"></div>
+
+        <!-- Render command section -->
+        <div id="render-cmd-section" style="display:none;margin-top:20px">
+          <div style="font-size:0.6rem;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Render Command (requires FFmpeg + Python)</div>
+          <div class="link-gen-box">
+            <input type="text" id="render-cmd" readonly value="" style="font-size:0.6rem">
+            <button onclick="copyRenderCmd()">Copy</button>
           </div>
-          <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid var(--border)">
-            <div id="render-bar" style="height:100%;background:linear-gradient(90deg,var(--purple-dim),var(--purple));width:0%;transition:width 0.3s;border-radius:3px"></div>
-          </div>
+          <p style="font-size:0.6rem;color:var(--text-muted);margin-top:8px;line-height:1.5">
+            1. Download your bait image below<br>
+            2. Place bait image, troll video, and render_troll.py in the same folder<br>
+            3. Run the command above to produce the final .mp4 with bait frame baked in
+          </p>
         </div>
-        <div style="text-align:center;margin-top:16px">
-          <button id="download-btn" class="btn-generate" style="display:none;padding:12px 36px;font-size:0.85rem" onclick="downloadRenderedVideo()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download Video
+
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:16px">
+          <button id="download-bait-btn" class="btn-generate" style="display:none;padding:12px 28px;font-size:0.8rem" onclick="downloadBaitImage()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            Bait Image
           </button>
+          <a id="download-btn" class="btn-generate" href="emodeninod-full19_6_new.mp4" download="emodeninod-full19_6_new.mp4" style="display:none;text-decoration:none;padding:12px 28px;font-size:0.8rem">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Troll Video
+          </a>
         </div>
       </div>
     </div>
@@ -1044,7 +1055,7 @@ function generateOutput() {
   }
   const btn = document.getElementById('gen-btn');
   btn.disabled = true;
-  btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Rendering...';
+  btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Generating...';
 
   const targetDur = parseFloat(document.getElementById('duration').value) || VIDEO_NATIVE_DURATION;
   const loop = document.getElementById('loop-toggle').checked;
@@ -1052,29 +1063,26 @@ function generateOutput() {
   const randomName = generateRandomFilename();
   document.getElementById('video-name').value = randomName;
 
+  // Save the bait image as a downloadable file
+  const baitSrc = customThumb || previewThumb.src;
+
   // Update output info
   document.getElementById('out-name').textContent = randomName;
   document.getElementById('out-duration').textContent = targetDur + 's';
   document.getElementById('out-loop').textContent = loop ? 'Looping' : 'No Loop';
   document.getElementById('out-boost').textContent = boostPct > 100 ? boostPct + '% Boost' : 'Normal Vol';
 
-  // Show output section with progress
+  // Show output section
   const outputSection = document.getElementById('output-section');
   outputSection.classList.add('visible');
-  document.getElementById('download-btn').style.display = 'none';
-  document.getElementById('render-progress').style.display = 'block';
-  document.getElementById('render-bar').style.width = '0%';
-  document.getElementById('render-pct').textContent = '0%';
+  document.getElementById('render-progress').style.display = 'none';
 
   // Set the bait image on the output thumbnail
-  const baitSrc = customThumb || previewThumb.src;
   document.getElementById('output-thumb').src = baitSrc;
   document.getElementById('output-thumb').style.display = 'block';
   document.getElementById('output-overlay').classList.remove('hidden');
   document.getElementById('output-video').style.display = 'none';
   outputPlaying = false;
-
-  outputSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
   // Store settings for playback test
   const ov = document.getElementById('output-video');
@@ -1082,155 +1090,43 @@ function generateOutput() {
   ov.dataset.shouldLoop = String(loop);
   ov.dataset.boostPct = String(boostPct);
 
-  // ── Render the actual video with bait frame baked in ──
-  renderTrollVideo(baitSrc, targetDur, loop, boostPct, randomName, btn);
+  // Generate the render command
+  const volArg = boostPct !== 100 ? ' --boost ' + boostPct : '';
+  const cmdStr = 'python3 render_troll.py --bait YOUR_BAIT_IMAGE.png --video emodeninod-full19_6_new.mp4 --duration ' + targetDur + volArg + ' --output ' + randomName + '.mp4';
+  document.getElementById('render-cmd').value = cmdStr;
+  document.getElementById('render-cmd-section').style.display = 'block';
+
+  // Save bait image for download
+  baitDownloadUrl = baitSrc;
+  document.getElementById('download-bait-btn').style.display = 'inline-flex';
+  document.getElementById('download-btn').style.display = 'inline-flex';
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Generate Troll';
+  toast('Troll configured! Download bait image + use the render command.');
+  outputSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function renderTrollVideo(baitSrc, targetDur, shouldLoop, boostPct, filename, btn) {
-  const BAIT_FRAME_DURATION = 0.15; // seconds of bait image at start
-  const canvas = document.createElement('canvas');
-  canvas.width = 1280;
-  canvas.height = 720;
-  const ctx = canvas.getContext('2d');
+let baitDownloadUrl = null;
 
-  // Load bait image
-  const baitImg = new Image();
-  baitImg.crossOrigin = 'anonymous';
-  baitImg.onload = () => {
-    // Create offscreen video for the troll content
-    const srcVid = document.createElement('video');
-    srcVid.src = 'emodeninod-full19_6_new.mp4';
-    srcVid.muted = true; // muted for capture; audio captured separately
-    srcVid.preload = 'auto';
-    srcVid.playsInline = true;
-
-    srcVid.addEventListener('loadeddata', () => {
-      // Set up MediaRecorder on the canvas stream
-      const canvasStream = canvas.captureStream(30);
-
-      // Capture audio from the source video
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioCtx.createMediaElementSource(srcVid);
-      const gainNode = audioCtx.createGain();
-      gainNode.gain.value = boostPct / 100;
-      source.connect(gainNode);
-      const dest = audioCtx.createMediaStreamDestination();
-      gainNode.connect(dest);
-      // Also connect to speakers so we can hear during test playback later
-      // (but not during render)
-
-      // Combine canvas video + audio
-      const combinedStream = new MediaStream([
-        ...canvasStream.getVideoTracks(),
-        ...dest.stream.getAudioTracks()
-      ]);
-
-      const chunks = [];
-      const recorder = new MediaRecorder(combinedStream, {
-        mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-          ? 'video/webm;codecs=vp9,opus'
-          : 'video/webm'
-      });
-
-      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        renderedBlobUrl = URL.createObjectURL(blob);
-        renderedFilename = filename + '.webm';
-
-        // Update output video to use the rendered blob
-        const outputVid = document.getElementById('output-video');
-        outputVid.src = renderedBlobUrl;
-
-        // Show download button, hide progress
-        document.getElementById('render-progress').style.display = 'none';
-        document.getElementById('download-btn').style.display = 'inline-flex';
-
-        btn.disabled = false;
-        btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Generate Troll';
-        toast('Troll video rendered — download or test it!');
-
-        // Cleanup
-        audioCtx.close();
-        srcVid.remove();
-      };
-
-      // Start recording
-      recorder.start(100);
-      const startTime = performance.now();
-      const totalMs = targetDur * 1000;
-      let baitDrawn = false;
-
-      // Draw bait frame first
-      drawBaitFrame();
-      srcVid.currentTime = 0;
-
-      function drawBaitFrame() {
-        // Draw bait image scaled to fill canvas
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const scale = Math.min(canvas.width / baitImg.width, canvas.height / baitImg.height);
-        const w = baitImg.width * scale;
-        const h = baitImg.height * scale;
-        ctx.drawImage(baitImg, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
-      }
-
-      // After bait frame duration, start playing troll video
-      setTimeout(() => {
-        baitDrawn = true;
-        srcVid.play();
-        drawLoop();
-      }, BAIT_FRAME_DURATION * 1000);
-
-      function drawLoop() {
-        const elapsed = performance.now() - startTime;
-        const pct = Math.min(100, (elapsed / totalMs) * 100);
-        document.getElementById('render-bar').style.width = pct + '%';
-        document.getElementById('render-pct').textContent = Math.round(pct) + '%';
-
-        if (elapsed >= totalMs) {
-          srcVid.pause();
-          recorder.stop();
-          return;
-        }
-
-        // Draw current video frame to canvas
-        if (!srcVid.paused && !srcVid.ended) {
-          ctx.fillStyle = '#000';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          const vw = srcVid.videoWidth || 1280;
-          const vh = srcVid.videoHeight || 720;
-          const scale = Math.min(canvas.width / vw, canvas.height / vh);
-          const dw = vw * scale;
-          const dh = vh * scale;
-          ctx.drawImage(srcVid, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
-        }
-
-        // Handle looping: if video ended and should loop, restart
-        if (srcVid.ended && shouldLoop) {
-          srcVid.currentTime = 0;
-          srcVid.play();
-        }
-
-        requestAnimationFrame(drawLoop);
-      }
-    });
-  };
-  baitImg.src = baitSrc;
-}
-
-let renderedBlobUrl = null;
-let renderedFilename = 'troll_video.webm';
-
-function downloadRenderedVideo() {
-  if (!renderedBlobUrl) { toast('No video rendered yet'); return; }
+function downloadBaitImage() {
+  if (!baitDownloadUrl) return;
   const a = document.createElement('a');
-  a.href = renderedBlobUrl;
-  a.download = renderedFilename;
+  a.href = baitDownloadUrl;
+  a.download = 'bait_image.png';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  toast('Bait image downloaded!');
+}
+
+function copyRenderCmd() {
+  const input = document.getElementById('render-cmd');
+  navigator.clipboard.writeText(input.value).then(() => toast('Command copied!')).catch(() => {
+    input.select();
+    document.execCommand('copy');
+    toast('Command copied!');
+  });
 }
 
 // Random filename generator
@@ -1249,7 +1145,9 @@ function playOutput() {
 
   if (outputPlaying) return;
 
-  // Reveal video, hide thumbnail and overlay
+  const targetDur = parseFloat(outputVideo.dataset.targetDuration) || VIDEO_NATIVE_DURATION;
+  const shouldLoop = outputVideo.dataset.shouldLoop === 'true';
+
   outputThumb.style.display = 'none';
   outputVideo.style.display = 'block';
   overlay.classList.add('hidden');
@@ -1257,13 +1155,24 @@ function playOutput() {
   outputVideo.muted = false;
   outputVideo.volume = 1.0;
   outputVideo.currentTime = 0;
-  outputVideo.loop = false;
+  outputVideo.loop = shouldLoop;
   outputVideo.play().catch(() => {});
   outputPlaying = true;
 
-  outputVideo.onended = () => {
+  outputVideo.onended = null;
+
+  if (outputTimer) clearTimeout(outputTimer);
+  outputTimer = setTimeout(() => {
+    outputVideo.pause();
     resetOutputToThumb();
-  };
+  }, targetDur * 1000);
+
+  if (!shouldLoop) {
+    outputVideo.onended = () => {
+      if (outputTimer) { clearTimeout(outputTimer); outputTimer = null; }
+      resetOutputToThumb();
+    };
+  }
 }
 
 function resetOutputToThumb() {
