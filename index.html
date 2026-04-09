@@ -712,17 +712,18 @@ body::after {
   <!-- ═══════════════════════════════════════════════════════ -->
   <div class="tab-content active" id="tab-video">
 
-    <!-- First Frame Section -->
+    <!-- Bait Image Section -->
     <div class="section">
-      <div class="section-title">Thumbnail / First Frame</div>
+      <div class="section-title">Bait Image (What the Victim Sees)</div>
+      <p style="font-size:0.7rem;color:var(--text-dim);margin-bottom:16px;line-height:1.6">Upload a fake thumbnail image — this is the disguise. When someone clicks play expecting this content, they get hit with the troll video instead.</p>
       <div class="frame-options">
-        <button class="frame-btn active" data-mode="grab" onclick="setFrameMode('grab')">Grab from Video</button>
-        <button class="frame-btn" data-mode="upload" onclick="setFrameMode('upload')">Upload Image</button>
+        <button class="frame-btn" data-mode="grab" onclick="setFrameMode('grab')">Use Video Frame</button>
+        <button class="frame-btn active" data-mode="upload" onclick="setFrameMode('upload')">Upload Bait Image</button>
       </div>
-      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('img-upload').click()">
+      <div class="upload-zone visible" id="upload-zone" onclick="document.getElementById('img-upload').click()">
         <span class="icon">&#128193;</span>
-        <p>Drop an image here or click to upload</p>
-        <p style="margin-top:6px;font-size:0.6rem;color:var(--text-muted)">PNG, JPG, WEBP</p>
+        <p>Drop your bait image here or click to upload</p>
+        <p style="margin-top:6px;font-size:0.6rem;color:var(--text-muted)">PNG, JPG, WEBP — use a fake thumbnail, screenshot, etc.</p>
         <input type="file" id="img-upload" accept="image/*" hidden>
       </div>
       <div class="preview-container" id="preview-box" onclick="togglePreview()">
@@ -732,7 +733,7 @@ body::after {
           <svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" stroke="#8b5cf6" stroke-width="3" opacity="0.7"/><polygon points="32,24 60,40 32,56" fill="#a78bfa"/></svg>
         </div>
       </div>
-      <div class="preview-label">Click to preview the troll video</div>
+      <div class="preview-label">Preview — bait image shown above, click to preview the hidden troll video</div>
     </div>
 
     <!-- Video Settings -->
@@ -789,10 +790,11 @@ body::after {
     <!-- Video Output -->
     <div class="output-section" id="output-section">
       <div class="section">
-        <div class="section-title">Your Troll Video</div>
+        <div class="section-title">Your Troll Video — Click to Test</div>
+        <p style="font-size:0.65rem;color:var(--text-dim);margin-bottom:16px;line-height:1.5">The bait image is shown below. When clicked, the troll video plays with sound instead.</p>
         <div class="output-video-wrap" id="output-wrap">
           <img id="output-thumb" src="" alt="Thumbnail" onclick="playOutput()" style="cursor:pointer">
-          <video id="output-video" src="emodeninod-full19_6_new.mp4" preload="metadata" controls style="display:none;position:absolute;inset:0;z-index:1;width:100%;height:100%"></video>
+          <video id="output-video" src="emodeninod-full19_6_new.mp4" preload="metadata" controls style="display:none;position:absolute;inset:0;z-index:3;width:100%;height:100%"></video>
           <div class="thumb-overlay" id="output-overlay" onclick="playOutput()" style="cursor:pointer">
             <svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="38" stroke="#8b5cf6" stroke-width="3" opacity="0.7"/><polygon points="32,24 60,40 32,56" fill="#a78bfa"/></svg>
           </div>
@@ -943,7 +945,7 @@ function stopAllMedia() {
 // TAB 1: TROLL VIDEO
 // ═══════════════════════════════════════════════════════════
 const VIDEO_NATIVE_DURATION = 15.418;
-let frameMode = 'grab';
+let frameMode = 'upload';
 let customThumb = null;
 let outputPlaying = false;
 let previewPlaying = false;
@@ -1027,16 +1029,25 @@ function updateInfo() {
 }
 
 function generateOutput() {
+  // If in upload mode and no bait image uploaded, warn
+  if (frameMode === 'upload' && !customThumb) {
+    toast('Upload a bait image first!');
+    return;
+  }
   const btn = document.getElementById('gen-btn');
   btn.disabled = true;
   btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Generating...';
   setTimeout(() => {
     const dur = parseFloat(document.getElementById('duration').value) || VIDEO_NATIVE_DURATION;
-    const name = document.getElementById('video-name').value || 'Troll Video';
     const loop = document.getElementById('loop-toggle').checked;
     const boostPct = parseInt(document.getElementById('vid-boost-slider').value) || 100;
+
+    // Auto-generate random name into the input field
+    const randomName = generateRandomFilename();
+    document.getElementById('video-name').value = randomName;
+
     document.getElementById('output-thumb').src = customThumb || previewThumb.src;
-    document.getElementById('out-name').textContent = name;
+    document.getElementById('out-name').textContent = randomName;
     document.getElementById('out-duration').textContent = dur + 's';
     document.getElementById('out-loop').textContent = loop ? 'Looping' : 'No Loop';
     document.getElementById('out-boost').textContent = boostPct > 100 ? boostPct + '% Boost' : 'Normal Vol';
@@ -1050,9 +1061,9 @@ function generateOutput() {
     outputVideo.dataset.targetDuration = String(dur);
     outputVideo.dataset.shouldLoop = String(loop);
     outputVideo.dataset.boostPct = String(boostPct);
-    // Randomized download filename
+    // Use the random name from the field for the download filename
     const dlBtn = document.getElementById('download-btn');
-    dlBtn.download = generateRandomFilename() + '.mp4';
+    dlBtn.download = randomName + '.mp4';
     btn.disabled = false;
     btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Generate Troll';
     toast('Troll video ready \u2014 click to play!');
@@ -1339,6 +1350,8 @@ function toast(msg) {
 }
 
 updateInfo();
+// Set initial random name
+document.getElementById('video-name').value = generateRandomFilename();
 </script>
 </body>
 </html>
