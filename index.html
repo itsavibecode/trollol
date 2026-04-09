@@ -800,16 +800,25 @@ body::after {
           </div>
         </div>
         <div class="output-info">
-          <span id="out-name">Emo Denino'd</span>
-          <span id="out-duration">15s</span>
-          <span id="out-loop">Looping</span>
-          <span id="out-boost">100%</span>
+          <span id="out-name">—</span>
+          <span id="out-duration">—</span>
+          <span id="out-loop">—</span>
+          <span id="out-boost">—</span>
+        </div>
+        <div id="render-progress" style="display:none;margin-top:16px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:0.6rem;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase">Rendering Video</span>
+            <span style="font-size:0.6rem;color:var(--purple-bright);font-weight:700" id="render-pct">0%</span>
+          </div>
+          <div style="height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;border:1px solid var(--border)">
+            <div id="render-bar" style="height:100%;background:linear-gradient(90deg,var(--purple-dim),var(--purple));width:0%;transition:width 0.3s;border-radius:3px"></div>
+          </div>
         </div>
         <div style="text-align:center;margin-top:16px">
-          <a id="download-btn" class="btn-generate" href="emodeninod-full19_6_new.mp4" download="Emo_Deninod.mp4" style="text-decoration:none;display:inline-flex;padding:12px 36px;font-size:0.85rem">
+          <button id="download-btn" class="btn-generate" style="display:none;padding:12px 36px;font-size:0.85rem" onclick="downloadRenderedVideo()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download Video
-          </a>
+          </button>
         </div>
       </div>
     </div>
@@ -1029,46 +1038,199 @@ function updateInfo() {
 }
 
 function generateOutput() {
-  // If in upload mode and no bait image uploaded, warn
   if (frameMode === 'upload' && !customThumb) {
     toast('Upload a bait image first!');
     return;
   }
   const btn = document.getElementById('gen-btn');
   btn.disabled = true;
-  btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Generating...';
-  setTimeout(() => {
-    const dur = parseFloat(document.getElementById('duration').value) || VIDEO_NATIVE_DURATION;
-    const loop = document.getElementById('loop-toggle').checked;
-    const boostPct = parseInt(document.getElementById('vid-boost-slider').value) || 100;
+  btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Rendering...';
 
-    // Auto-generate random name into the input field
-    const randomName = generateRandomFilename();
-    document.getElementById('video-name').value = randomName;
+  const targetDur = parseFloat(document.getElementById('duration').value) || VIDEO_NATIVE_DURATION;
+  const loop = document.getElementById('loop-toggle').checked;
+  const boostPct = parseInt(document.getElementById('vid-boost-slider').value) || 100;
+  const randomName = generateRandomFilename();
+  document.getElementById('video-name').value = randomName;
 
-    document.getElementById('output-thumb').src = customThumb || previewThumb.src;
-    document.getElementById('out-name').textContent = randomName;
-    document.getElementById('out-duration').textContent = dur + 's';
-    document.getElementById('out-loop').textContent = loop ? 'Looping' : 'No Loop';
-    document.getElementById('out-boost').textContent = boostPct > 100 ? boostPct + '% Boost' : 'Normal Vol';
-    const outputSection = document.getElementById('output-section');
-    outputSection.classList.add('visible');
-    const outputVideo = document.getElementById('output-video');
-    outputVideo.style.display = 'none';
-    document.getElementById('output-thumb').style.display = 'block';
-    document.getElementById('output-overlay').classList.remove('hidden');
-    outputPlaying = false;
-    outputVideo.dataset.targetDuration = String(dur);
-    outputVideo.dataset.shouldLoop = String(loop);
-    outputVideo.dataset.boostPct = String(boostPct);
-    // Use the random name from the field for the download filename
-    const dlBtn = document.getElementById('download-btn');
-    dlBtn.download = randomName + '.mp4';
-    btn.disabled = false;
-    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Generate Troll';
-    toast('Troll video ready \u2014 click to play!');
-    outputSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 800);
+  // Update output info
+  document.getElementById('out-name').textContent = randomName;
+  document.getElementById('out-duration').textContent = targetDur + 's';
+  document.getElementById('out-loop').textContent = loop ? 'Looping' : 'No Loop';
+  document.getElementById('out-boost').textContent = boostPct > 100 ? boostPct + '% Boost' : 'Normal Vol';
+
+  // Show output section with progress
+  const outputSection = document.getElementById('output-section');
+  outputSection.classList.add('visible');
+  document.getElementById('download-btn').style.display = 'none';
+  document.getElementById('render-progress').style.display = 'block';
+  document.getElementById('render-bar').style.width = '0%';
+  document.getElementById('render-pct').textContent = '0%';
+
+  // Set the bait image on the output thumbnail
+  const baitSrc = customThumb || previewThumb.src;
+  document.getElementById('output-thumb').src = baitSrc;
+  document.getElementById('output-thumb').style.display = 'block';
+  document.getElementById('output-overlay').classList.remove('hidden');
+  document.getElementById('output-video').style.display = 'none';
+  outputPlaying = false;
+
+  outputSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // Store settings for playback test
+  const ov = document.getElementById('output-video');
+  ov.dataset.targetDuration = String(targetDur);
+  ov.dataset.shouldLoop = String(loop);
+  ov.dataset.boostPct = String(boostPct);
+
+  // ── Render the actual video with bait frame baked in ──
+  renderTrollVideo(baitSrc, targetDur, loop, boostPct, randomName, btn);
+}
+
+function renderTrollVideo(baitSrc, targetDur, shouldLoop, boostPct, filename, btn) {
+  const BAIT_FRAME_DURATION = 0.15; // seconds of bait image at start
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280;
+  canvas.height = 720;
+  const ctx = canvas.getContext('2d');
+
+  // Load bait image
+  const baitImg = new Image();
+  baitImg.crossOrigin = 'anonymous';
+  baitImg.onload = () => {
+    // Create offscreen video for the troll content
+    const srcVid = document.createElement('video');
+    srcVid.src = 'emodeninod-full19_6_new.mp4';
+    srcVid.muted = true; // muted for capture; audio captured separately
+    srcVid.preload = 'auto';
+    srcVid.playsInline = true;
+
+    srcVid.addEventListener('loadeddata', () => {
+      // Set up MediaRecorder on the canvas stream
+      const canvasStream = canvas.captureStream(30);
+
+      // Capture audio from the source video
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaElementSource(srcVid);
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.value = boostPct / 100;
+      source.connect(gainNode);
+      const dest = audioCtx.createMediaStreamDestination();
+      gainNode.connect(dest);
+      // Also connect to speakers so we can hear during test playback later
+      // (but not during render)
+
+      // Combine canvas video + audio
+      const combinedStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...dest.stream.getAudioTracks()
+      ]);
+
+      const chunks = [];
+      const recorder = new MediaRecorder(combinedStream, {
+        mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+          ? 'video/webm;codecs=vp9,opus'
+          : 'video/webm'
+      });
+
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        renderedBlobUrl = URL.createObjectURL(blob);
+        renderedFilename = filename + '.webm';
+
+        // Update output video to use the rendered blob
+        const outputVid = document.getElementById('output-video');
+        outputVid.src = renderedBlobUrl;
+
+        // Show download button, hide progress
+        document.getElementById('render-progress').style.display = 'none';
+        document.getElementById('download-btn').style.display = 'inline-flex';
+
+        btn.disabled = false;
+        btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5,3 19,12 5,21"/></svg> Generate Troll';
+        toast('Troll video rendered — download or test it!');
+
+        // Cleanup
+        audioCtx.close();
+        srcVid.remove();
+      };
+
+      // Start recording
+      recorder.start(100);
+      const startTime = performance.now();
+      const totalMs = targetDur * 1000;
+      let baitDrawn = false;
+
+      // Draw bait frame first
+      drawBaitFrame();
+      srcVid.currentTime = 0;
+
+      function drawBaitFrame() {
+        // Draw bait image scaled to fill canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const scale = Math.min(canvas.width / baitImg.width, canvas.height / baitImg.height);
+        const w = baitImg.width * scale;
+        const h = baitImg.height * scale;
+        ctx.drawImage(baitImg, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+      }
+
+      // After bait frame duration, start playing troll video
+      setTimeout(() => {
+        baitDrawn = true;
+        srcVid.play();
+        drawLoop();
+      }, BAIT_FRAME_DURATION * 1000);
+
+      function drawLoop() {
+        const elapsed = performance.now() - startTime;
+        const pct = Math.min(100, (elapsed / totalMs) * 100);
+        document.getElementById('render-bar').style.width = pct + '%';
+        document.getElementById('render-pct').textContent = Math.round(pct) + '%';
+
+        if (elapsed >= totalMs) {
+          srcVid.pause();
+          recorder.stop();
+          return;
+        }
+
+        // Draw current video frame to canvas
+        if (!srcVid.paused && !srcVid.ended) {
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          const vw = srcVid.videoWidth || 1280;
+          const vh = srcVid.videoHeight || 720;
+          const scale = Math.min(canvas.width / vw, canvas.height / vh);
+          const dw = vw * scale;
+          const dh = vh * scale;
+          ctx.drawImage(srcVid, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+        }
+
+        // Handle looping: if video ended and should loop, restart
+        if (srcVid.ended && shouldLoop) {
+          srcVid.currentTime = 0;
+          srcVid.play();
+        }
+
+        requestAnimationFrame(drawLoop);
+      }
+    });
+  };
+  baitImg.src = baitSrc;
+}
+
+let renderedBlobUrl = null;
+let renderedFilename = 'troll_video.webm';
+
+function downloadRenderedVideo() {
+  if (!renderedBlobUrl) { toast('No video rendered yet'); return; }
+  const a = document.createElement('a');
+  a.href = renderedBlobUrl;
+  a.download = renderedFilename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // Random filename generator
@@ -1087,66 +1249,21 @@ function playOutput() {
 
   if (outputPlaying) return;
 
-  const targetDur = parseFloat(outputVideo.dataset.targetDuration) || VIDEO_NATIVE_DURATION;
-  const shouldLoop = outputVideo.dataset.shouldLoop === 'true';
-  const boostPct = parseFloat(outputVideo.dataset.boostPct) || 100;
-
   // Reveal video, hide thumbnail and overlay
   outputThumb.style.display = 'none';
   outputVideo.style.display = 'block';
   overlay.classList.add('hidden');
 
-  // Ensure sound is ON
   outputVideo.muted = false;
   outputVideo.volume = 1.0;
   outputVideo.currentTime = 0;
-
-  // Set loop on the video element itself — browser handles seamless looping
-  outputVideo.loop = shouldLoop;
-
-  // Sound boost via Web Audio API gain node
-  if (boostPct > 100) {
-    try {
-      if (!outputVideo._audioCtx) {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const source = ctx.createMediaElementSource(outputVideo);
-        const gainNode = ctx.createGain();
-        source.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        outputVideo._audioCtx = ctx;
-        outputVideo._gainNode = gainNode;
-      }
-      outputVideo._audioCtx.resume();
-      outputVideo._gainNode.gain.value = boostPct / 100;
-    } catch (e) {
-      console.warn('Audio boost failed:', e);
-    }
-  } else if (outputVideo._gainNode) {
-    outputVideo._gainNode.gain.value = 1.0;
-  }
-
+  outputVideo.loop = false;
   outputVideo.play().catch(() => {});
   outputPlaying = true;
 
-  // Clear any old ended handler to avoid fighting with loop
-  outputVideo.onended = null;
-
-  // Duration cutoff timer — this is the master timer
-  if (outputTimer) clearTimeout(outputTimer);
-  outputTimer = setTimeout(() => {
-    outputVideo.pause();
+  outputVideo.onended = () => {
     resetOutputToThumb();
-  }, targetDur * 1000);
-
-  // If NOT looping, video ends naturally before the duration timer
-  if (!shouldLoop) {
-    outputVideo.onended = () => {
-      if (outputTimer) { clearTimeout(outputTimer); outputTimer = null; }
-      resetOutputToThumb();
-    };
-  }
-  // If looping, browser's native loop handles it — onended never fires
-  // The duration timer above will cut it off at the right time
+  };
 }
 
 function resetOutputToThumb() {
